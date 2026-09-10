@@ -334,7 +334,9 @@ Correct the path/casing in the Limine configuration if necessary.
 
 ---
 
-## Laptop boots Windows directly
+## Laptop boots Windows directly `[✓ Confirmed Fix]`
+
+**Short-form Summary:**
 
 Run:
 
@@ -361,6 +363,48 @@ sudo efibootmgr -o 0003,0005,...
 ```
 
 Use the actual IDs from your laptop.
+
+<details open>
+<summary><b>Detailed Steps & Real-World Diagnosis</b></summary>
+
+### SYMPTOM
+"On power-on, no boot menu appears at all — the machine boots straight into Windows. The Limine menu (Omarchy / Windows Boot Manager) only appears if you manually press the firmware boot-selection key (F12, Esc, F10, etc. depending on manufacturer) during POST and choose Limine from that firmware menu by hand."
+
+> **Self-Diagnosis Note:** Distinguish this clearly from a DIFFERENT symptom that looks similar: *"The Limine menu appears automatically, but Windows Boot Manager is the highlighted/default entry."* That is a separate issue controlled by Limine's `default_entry` setting in `/boot/limine.conf`, not a UEFI BootOrder issue.
+
+### ROOT CAUSE
+The UEFI firmware's BootOrder has "Windows Boot Manager" listed before the Limine/Linux boot entry. On power-on, firmware loads whatever is first in BootOrder directly — Limine never gets a chance to run unless the user bypasses BootOrder via the firmware's one-time boot menu.
+
+### CONFIRMED FIX
+
+1. Boot into Omarchy normally (or via the manual firmware boot menu if that's the only way in right now).
+2. Open a terminal and run:
+   ```bash
+   sudo efibootmgr -v
+   ```
+   List every boot entry with its 4-digit ID and label. Identify the ID for the Limine entry (may be labeled "Limine," "Linux Boot Manager," or similar — not always literally "Limine") and the ID for "Windows Boot Manager."
+3. In the same output, find the "BootOrder:" line — a comma-separated list of IDs. Whichever ID is FIRST is what boots by default.
+4. Reorder it so the Limine ID comes first:
+   ```bash
+   sudo efibootmgr -o <LIMINE_ID>,<WINDOWS_ID>,<rest of original IDs in original order>
+   ```
+   *Example only — do not let users copy literally:*
+   ```bash
+   sudo efibootmgr -o 0003,0005,0000,2001
+   ```
+5. Verify: run `sudo efibootmgr` again and confirm BootOrder now starts with the Limine ID.
+6. Reboot without pressing any boot-selection key:
+   ```bash
+   sudo reboot
+   ```
+   The Limine menu should now appear automatically.
+
+### CAVEATS & WARNINGS
+* **Label Variations:** The Limine entry's label varies by system — it is not always literally named "Limine." Identify it by process of elimination (whichever entry isn't "Windows Boot Manager" and isn't a manufacturer diagnostic/recovery entry).
+* **Silently Reverting / Fast Startup:** On some laptops (notably many Lenovo, HP, and Dell models), the boot order can silently revert to Windows-first after a firmware update or because Windows "Fast Startup" re-registers itself as default. If the fix stops working after a reboot or two, check Windows Fast Startup (Control Panel > Power Options > Choose what the power buttons do > uncheck "Turn on fast startup") and re-run the `efibootmgr -o` command if BootOrder reverted.
+* **Secure Boot Errors:** `efibootmgr -o` failing with a permission or "operation not supported" error usually means Secure Boot is still enabled — point back to the Section 0 BIOS/UEFI prep steps to disable it.
+
+</details>
 
 ---
 

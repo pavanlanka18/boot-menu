@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import './App.css';
 
 const SECTIONS = [
@@ -471,12 +471,90 @@ function App() {
             </div>
 
             <div className="trouble-issue">
-              <h3>Laptop boots directly into Windows</h3>
+              <div className="trouble-header">
+                <h3>Laptop boots directly into Windows</h3>
+                <span className="status-badge-verified">✓ Confirmed Fix</span>
+              </div>
               <p className="list-intro">Check UEFI boot order:</p>
               <CodeBlock code="sudo efibootmgr" language="bash" />
 
-              <p>If Windows is listed first in <code>BootOrder:</code>, run efibootmgr with <code>-o</code> to put Limine first:</p>
-              <CodeBlock code="sudo efibootmgr -o <LIMINE_ID>,<WINDOWS_ID>,..." language="bash" />
+              <p>If Windows is listed first in <code>BootOrder:</code> (e.g., <code>BootOrder: 0005,0003,...</code>), change it so Limine is first:</p>
+              <CodeBlock code="sudo efibootmgr -o 0003,0005,..." language="bash" />
+
+              <details className="trouble-disclosure" open>
+                <summary className="disclosure-summary">Detailed Steps &amp; Confirmed Real-World Fix</summary>
+                <div className="disclosure-content">
+                  <div className="symptom-box">
+                    <strong>SYMPTOM:</strong>
+                    <p>
+                      "On power-on, no boot menu appears at all — the machine boots straight into Windows. The Limine menu (Omarchy / Windows Boot Manager) only appears if you manually press the firmware boot-selection key (F12, Esc, F10, etc. depending on manufacturer) during POST and choose Limine from that firmware menu by hand."
+                    </p>
+                  </div>
+
+                  <div className="callout callout-info">
+                    <div className="callout-icon">💡</div>
+                    <div className="callout-body">
+                      <strong>Self-Diagnosis Note:</strong> Distinguish this from a different symptom: <em>"The Limine menu appears automatically, but Windows Boot Manager is the highlighted/default entry."</em> That is a separate issue controlled by Limine's <code>default_entry</code> setting in <code>/boot/limine.conf</code>, not a UEFI BootOrder issue.
+                    </div>
+                  </div>
+
+                  <div className="root-cause-box">
+                    <strong>ROOT CAUSE:</strong>
+                    <p>
+                      The UEFI firmware's BootOrder has "Windows Boot Manager" listed before the Limine/Linux boot entry. On power-on, firmware loads whatever is first in BootOrder directly — Limine never gets a chance to run unless the user bypasses BootOrder via the firmware's one-time boot menu.
+                    </p>
+                  </div>
+
+                  <div className="sub-issue">
+                    <h4>Confirmed Fix — Step-by-Step</h4>
+                    <ol className="step-list">
+                      <li>
+                        Boot into Omarchy normally (or via the manual firmware boot menu if that's the only way in right now).
+                      </li>
+                      <li>
+                        Open a terminal and run:
+                        <CodeBlock code="sudo efibootmgr -v" language="bash" />
+                        List every boot entry with its 4-digit ID and label. Identify the ID for the Limine entry (may be labeled "Limine," "Linux Boot Manager," or similar — not always literally "Limine") and the ID for "Windows Boot Manager."
+                      </li>
+                      <li>
+                        In the same output, find the <code>BootOrder:</code> line — a comma-separated list of IDs. Whichever ID is FIRST is what boots by default.
+                      </li>
+                      <li>
+                        Reorder it so the Limine ID comes first:
+                        <CodeBlock code="sudo efibootmgr -o <LIMINE_ID>,<WINDOWS_ID>,<rest of original IDs in original order>" language="bash" />
+                        Example only — do not let users copy literally:
+                        <CodeBlock code="sudo efibootmgr -o 0003,0005,0000,2001" language="bash" />
+                      </li>
+                      <li>
+                        Verify: run <code>sudo efibootmgr</code> again and confirm BootOrder now starts with the Limine ID.
+                      </li>
+                      <li>
+                        Reboot without pressing any boot-selection key:
+                        <CodeBlock code="sudo reboot" language="bash" />
+                        The Limine menu should now appear automatically.
+                      </li>
+                    </ol>
+                  </div>
+
+                  <div className="callout callout-warning">
+                    <div className="callout-icon">⚠️</div>
+                    <div className="callout-body">
+                      <strong>Important Caveats &amp; Warnings:</strong>
+                      <ul className="caveats-list">
+                        <li>
+                          <strong>Label Variations:</strong> The Limine entry's label varies by system — it is not always literally named "Limine." Tell users to identify it by process of elimination (whichever entry isn't "Windows Boot Manager" and isn't a manufacturer diagnostic/recovery entry).
+                        </li>
+                        <li>
+                          <strong>Silently Reverting / Fast Startup:</strong> On some laptops (notably many Lenovo, HP, and Dell models), the boot order can silently revert to Windows-first after a firmware update or because Windows "Fast Startup" re-registers itself as default. If the fix stops working after a reboot or two, tell users to check Windows Fast Startup (Control Panel &gt; Power Options &gt; Choose what the power buttons do &gt; uncheck "Turn on fast startup") and re-run the <code>efibootmgr -o</code> command if BootOrder reverted.
+                        </li>
+                        <li>
+                          <strong>Secure Boot Errors:</strong> <code>efibootmgr -o</code> failing with a permission or "operation not supported" error usually means Secure Boot is still enabled — point back to the Section 0 BIOS/UEFI prep steps to disable it.
+                        </li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </details>
             </div>
 
             <div className="trouble-issue">
